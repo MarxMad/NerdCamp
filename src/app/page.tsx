@@ -87,7 +87,7 @@ const WESTEND_CHAIN_ID_HEX = '0x191d4555';
 
 declare global {
   interface Window {
-    ethereum?: any;
+    ethereum?: ethers.providers.ExternalProvider;
   }
 }
 
@@ -109,13 +109,13 @@ export default function Landing() {
           const contract = new ethers.Contract(contractAddress, contractABI, signer);
           const rolOnChain = await contract.miRol();
           setRol(Number(rolOnChain));
-          // Guardar en localStorage para futuras validaciones
           let tipo = "";
           if (Number(rolOnChain) === 1) tipo = "paciente";
           if (Number(rolOnChain) === 2) tipo = "dentista";
           localStorage.setItem('user', JSON.stringify({ wallet: address, tipo }));
           setHasUser(tipo === 'paciente' || tipo === 'dentista');
-        } catch (e) {
+        } catch (error) {
+          console.error('Error al obtener rol:', error);
           setRol(0);
           setHasUser(false);
         }
@@ -175,10 +175,11 @@ export default function Landing() {
     } catch (err: unknown) {
       let mensajeError = 'Error desconocido';
       if (err && typeof err === 'object') {
-        if ('reason' in err && typeof (err as any).reason === 'string') {
-          mensajeError = (err as any).reason;
-        } else if ('message' in err && typeof (err as any).message === 'string') {
-          mensajeError = (err as any).message;
+        const errorObj = err as { reason?: string; message?: string };
+        if (errorObj.reason) {
+          mensajeError = errorObj.reason;
+        } else if (errorObj.message) {
+          mensajeError = errorObj.message;
         }
       }
       setMensaje('Error: ' + mensajeError);

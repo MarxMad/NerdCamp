@@ -12,10 +12,12 @@ interface WalletConnectProps {
 export const WalletConnect: React.FC<WalletConnectProps> = () => {
   const { disconnect } = useDisconnect();
 
+  /* Comentado por no uso
   const handleDisconnect = () => {
     localStorage.removeItem('user');
     disconnect();
   };
+  */
 
   return (
     <div>

@@ -16,11 +16,12 @@ interface PatientModeProps {
 export const PatientMode: React.FC<PatientModeProps> = ({
   record,
   provider,
-  patientAddress,
+  // patientAddress, // Comentado por no uso
 }) => {
   const [activeTab, setActiveTab] = useState<'record' | 'access' | 'history' | 'dentists' | 'studies' | 'calendar' | 'stats'>('record');
+  const [newNote, setNewNote] = useState('');
   const [dentistAddress, setDentistAddress] = useState('');
-  const [accessDays, setAccessDays] = useState(7);
+  // const [accessDays, setAccessDays] = useState(7); // Comentado por no uso
   const [isGrantingAccess, setIsGrantingAccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());

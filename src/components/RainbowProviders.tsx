@@ -6,7 +6,7 @@ import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { mainnet, sepolia } from 'wagmi/chains';
 import React from 'react';
-import { createConfig, http } from 'wagmi';
+// import { createConfig, http } from 'wagmi';
 
 // Definición de la red personalizada
 const westendAssetHub = {

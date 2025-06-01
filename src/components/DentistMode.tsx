@@ -6,7 +6,7 @@ import { DentalRecord as DentalRecordBase, DentalNote, Treatment, XRay, Attached
 import { AnimatedCard } from "./AnimatedCard";
 
 interface DentistModeProps {
-  provider?: ethers.providers.Web3Provider;
+  // provider?: ethers.providers.Web3Provider; // Comentado por no uso
 }
 
 // Agregar tipo para citas
@@ -45,7 +45,9 @@ interface DentalRecord extends DentalRecordBase {
   appointments?: Appointment[];
 }
 
-export const DentistMode: React.FC<DentistModeProps> = ({ provider }) => {
+export const DentistMode: React.FC<DentistModeProps> = ({
+  // provider, // Comentado por no uso
+}) => {
   const [patientAddress, setPatientAddress] = useState("");
   const [record, setRecord] = useState<DentalRecord | null>(null);
   const [loading, setLoading] = useState(false);

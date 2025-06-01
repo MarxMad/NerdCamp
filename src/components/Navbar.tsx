@@ -28,6 +28,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     setIsClient(true);
   }, []);
 
+  /* Comentado por no uso
   const handleWalletConnect = (_provider: ethers.providers.Web3Provider | undefined, address: string) => {
     // Buscar usuario en localStorage
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -41,6 +42,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     }
     setError('Wallet no registrada. Por favor regístrate primero.');
   };
+  */
 
   return (
     <nav className="bg-white shadow-lg fixed top-0 left-0 w-full z-50">
