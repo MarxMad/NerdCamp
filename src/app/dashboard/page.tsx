@@ -75,12 +75,19 @@ const mockRecord: DentalRecord = {
   nftStatus: "verificado"
 };
 
+// 1. Agrega la declaración global si no existe:
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [isDentist, setIsDentist] = useState(false);
   const { address, isConnected } = useAccount();
-  const provider = typeof window !== 'undefined' && (window as any).ethereum
-    ? new ethers.providers.Web3Provider((window as any).ethereum)
+  const provider = typeof window !== 'undefined' && window.ethereum
+    ? new ethers.providers.Web3Provider(window.ethereum)
     : undefined;
 
   useEffect(() => {

@@ -85,6 +85,12 @@ const mockRecord: DentalRecord = {
 const WESTEND_CHAIN_ID = 420420421;
 const WESTEND_CHAIN_ID_HEX = '0x191d4555';
 
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
 export default function Landing() {
   const router = useRouter();
   const [hasUser, setHasUser] = useState(false);
@@ -96,9 +102,9 @@ export default function Landing() {
 
   useEffect(() => {
     const fetchRol = async () => {
-      if (isConnected && address && (window as any).ethereum) {
+      if (isConnected && address && window.ethereum) {
         try {
-          const provider = new ethers.providers.Web3Provider((window as any).ethereum);
+          const provider = new ethers.providers.Web3Provider(window.ethereum);
           const signer = provider.getSigner();
           const contract = new ethers.Contract(contractAddress, contractABI, signer);
           const rolOnChain = await contract.miRol();
@@ -123,8 +129,8 @@ export default function Landing() {
 
   useEffect(() => {
     const checkNetwork = async () => {
-      if ((window as any).ethereum) {
-        const chainId = await (window as any).ethereum.request({ method: 'eth_chainId' });
+      if (window.ethereum) {
+        const chainId = await window.ethereum.request({ method: 'eth_chainId' });
         setNetworkOk(chainId === WESTEND_CHAIN_ID_HEX);
       }
     };
@@ -135,12 +141,12 @@ export default function Landing() {
     const handleChainChanged = () => {
       window.location.reload();
     };
-    if ((window as any).ethereum) {
-      (window as any).ethereum.on('chainChanged', handleChainChanged);
+    if (window.ethereum) {
+      window.ethereum.on('chainChanged', handleChainChanged);
     }
     return () => {
-      if ((window as any).ethereum) {
-        (window as any).ethereum.removeListener('chainChanged', handleChainChanged);
+      if (window.ethereum) {
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
       }
     };
   }, []);
@@ -149,8 +155,8 @@ export default function Landing() {
     setLoading(true);
     setMensaje("");
     try {
-      if (!(window as any).ethereum) throw new Error("Conecta tu wallet");
-      const provider = new ethers.providers.Web3Provider((window as any).ethereum);
+      if (!window.ethereum) throw new Error("Conecta tu wallet");
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
       const signer = provider.getSigner();
       const network = await provider.getNetwork();
       console.log("Red actual:", network);
@@ -166,8 +172,16 @@ export default function Landing() {
       }
       await tx.wait();
       setMensaje(`¡${tipo === "paciente" ? "Paciente" : "Dentista"} registrado correctamente!`);
-    } catch (err: any) {
-      setMensaje("Error: " + (err.reason || err.message));
+    } catch (err: unknown) {
+      let mensajeError = 'Error desconocido';
+      if (err && typeof err === 'object') {
+        if ('reason' in err && typeof (err as any).reason === 'string') {
+          mensajeError = (err as any).reason;
+        } else if ('message' in err && typeof (err as any).message === 'string') {
+          mensajeError = (err as any).message;
+        }
+      }
+      setMensaje('Error: ' + mensajeError);
       console.error(err);
     }
     setLoading(false);

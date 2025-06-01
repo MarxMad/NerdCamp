@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { WalletConnect } from './WalletConnect';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { ethers } from 'ethers';
 
 interface NavbarProps {
-  onConnect?: (provider: any, address: string) => void;
+  onConnect?: (provider: ethers.providers.Web3Provider | undefined, address: string) => void;
   isDentist?: boolean;
   onToggleMode?: () => void;
   showLoginButton?: boolean;
@@ -27,7 +28,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     setIsClient(true);
   }, []);
 
-  const handleWalletConnect = (_provider: any, address: string) => {
+  const handleWalletConnect = (_provider: ethers.providers.Web3Provider | undefined, address: string) => {
     // Buscar usuario en localStorage
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     if (user.wallet && user.wallet.toLowerCase() === address.toLowerCase()) {

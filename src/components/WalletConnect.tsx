@@ -3,9 +3,10 @@
 import React from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useDisconnect } from 'wagmi';
+import { ethers } from 'ethers';
 
 interface WalletConnectProps {
-  onConnect?: (provider: any, address: string) => void;
+  onConnect?: (provider: ethers.providers.Web3Provider | undefined, address: string) => void;
 }
 
 export const WalletConnect: React.FC<WalletConnectProps> = () => {
