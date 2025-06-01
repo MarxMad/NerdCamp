@@ -3,11 +3,11 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Navbar } from '../components/Navbar';
-import { DentalCard } from '../components/DentalCard';
-import { PatientMode } from '../components/PatientMode';
+// import { DentalCard } from '../components/DentalCard';
+// import { PatientMode } from '../components/PatientMode';
 import { ethers } from 'ethers';
 import { DentalRecord } from '../types/dental';
-import { DentistMode } from '../components/DentistMode';
+// import { DentistMode } from '../components/DentistMode';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { FaShieldAlt, FaUserCheck, FaLock } from 'react-icons/fa';
@@ -17,77 +17,16 @@ import contractABI from '../abi/MyDentalVault.json';
 const contractAddress = "0xe3B1B985422E56Da480af78238C3bc4B82f1965B";
 
 // Datos de ejemplo
-const mockRecord: DentalRecord = {
-  patientInfo: {
-    nombre: "Juan Pérez",
-    fechaNacimiento: "1990-05-12",
-    edad: 34,
-    genero: "Masculino",
-    direccion: "Calle Falsa 123, Ciudad",
-    contacto: "juan.perez@email.com",
-    numeroSeguro: "123456789"
-  },
-  healthInfo: {
-    alergias: ["Penicilina"],
-    enfermedadesCronicas: ["Diabetes"],
-    medicamentos: ["Metformina"],
-    antecedentes: "Ninguno"
-  },
-  lastCheckup: "2024-04-01",
-  generalObservation: [
-    {
-      fecha: "2024-04-01",
-      observaciones: "Encías saludables. Sin caries.",
-      doctor: "Dra. Martínez"
-    }
-  ],
-  treatments: [
-    {
-      id: "1",
-      type: "Limpieza",
-      date: "2024-03-01",
-      description: "Limpieza dental profesional.",
-      dentist: "Dr. García",
-      status: "completado"
-    }
-  ],
-  xRays: [
-    {
-      id: "1",
-      date: "2024-03-01",
-      type: "Panorámica",
-      ipfsHash: "Qm...",
-      description: "Radiografía panorámica."
-    }
-  ],
-  currentTreatmentPlan: "Revisión en 6 meses.",
-  notes: [
-    {
-      id: "1",
-      date: "2024-04-01",
-      content: "Mantener buena higiene.",
-      dentist: "Dra. Martínez"
-    }
-  ],
-  accessGrants: [],
-  attachedDocuments: [
-    {
-      id: "1",
-      name: "Consentimiento informado",
-      url: "https://ipfs.io/ipfs/Qm...",
-      type: "PDF",
-      uploadedAt: "2024-04-01"
-    }
-  ],
-  nftStatus: "verificado"
-};
+// const mockRecord: DentalRecord = {
+// ... existing code ...
+// };
 
-const WESTEND_CHAIN_ID = 420420421;
+// const WESTEND_CHAIN_ID = 420420421;
 const WESTEND_CHAIN_ID_HEX = '0x191d4555';
 
 declare global {
   interface Window {
-    ethereum?: ethers.providers.ExternalProvider;
+    ethereum?: any;
   }
 }
 
@@ -95,7 +34,7 @@ export default function Landing() {
   const router = useRouter();
   const [hasUser, setHasUser] = useState(false);
   const { address, isConnected } = useAccount();
-  const [loading, setLoading] = useState(false);
+  // const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [rol, setRol] = useState<number | null>(null);
   const [networkOk, setNetworkOk] = useState(true);
@@ -152,7 +91,7 @@ export default function Landing() {
   }, []);
 
   const registrar = async (tipo: "paciente" | "dentista") => {
-    setLoading(true);
+    // setLoading(true);
     setMensaje("");
     try {
       if (!window.ethereum) throw new Error("Conecta tu wallet");
@@ -185,7 +124,7 @@ export default function Landing() {
       setMensaje('Error: ' + mensajeError);
       console.error(err);
     }
-    setLoading(false);
+    // setLoading(false);
   };
 
   return (

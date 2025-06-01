@@ -10,7 +10,7 @@ interface WalletConnectProps {
 }
 
 export const WalletConnect: React.FC<WalletConnectProps> = () => {
-  const { disconnect } = useDisconnect();
+  // const { disconnect } = useDisconnect();
 
   /* Comentado por no uso
   const handleDisconnect = () => {

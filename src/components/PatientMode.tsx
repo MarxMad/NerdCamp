@@ -19,7 +19,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
   // patientAddress, // Comentado por no uso
 }) => {
   const [activeTab, setActiveTab] = useState<'record' | 'access' | 'history' | 'dentists' | 'studies' | 'calendar' | 'stats'>('record');
-  const [newNote, setNewNote] = useState('');
+  // const [newNote, setNewNote] = useState('');
   const [dentistAddress, setDentistAddress] = useState('');
   // const [accessDays, setAccessDays] = useState(7); // Comentado por no uso
   const [isGrantingAccess, setIsGrantingAccess] = useState(false);
@@ -132,8 +132,9 @@ export const PatientMode: React.FC<PatientModeProps> = ({
       setDentistAddress('');
       setError(null);
       alert('¡Acceso otorgado correctamente!');
-    } catch (err: any) {
-      setError('Error al otorgar acceso: ' + (err.reason || err.message));
+    } catch (err: unknown) {
+      const errorObj = err as { reason?: string; message?: string };
+      setError('Error al otorgar acceso: ' + (errorObj.reason || errorObj.message || 'Error desconocido'));
       console.error(err);
     } finally {
       setIsGrantingAccess(false);
@@ -695,7 +696,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
               key={key}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setActiveTab(key as any)}
+              onClick={() => setActiveTab(key as 'record' | 'access' | 'history' | 'dentists' | 'studies' | 'calendar' | 'stats')}
               className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 activeTab === key
                   ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow'

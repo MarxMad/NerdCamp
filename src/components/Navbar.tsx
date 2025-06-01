@@ -19,10 +19,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleMode,
   showLoginButton,
 }) => {
-  const router = useRouter();
+  // const router = useRouter();
   const [isClient, setIsClient] = useState(false);
   const [error, setError] = useState('');
-  const [walletConnected, setWalletConnected] = useState(false);
+  // const [walletConnected, setWalletConnected] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -61,7 +61,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-center w-full sm:w-auto justify-center sm:justify-end gap-2 sm:gap-4">
-            {showLoginButton && isClient && !walletConnected ? (
+            {showLoginButton && isClient ? (
               <>
                 <div className="flex flex-col w-full sm:w-auto gap-2">
                   <div className="flex w-full sm:w-auto">
