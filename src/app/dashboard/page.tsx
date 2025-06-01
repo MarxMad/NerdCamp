@@ -76,11 +76,11 @@ const mockRecord: DentalRecord = {
 };
 
 // 1. Agrega la declaración global si no existe:
-declare global {
-  interface Window {
-    ethereum?: any;
-  }
-}
+// declare global {
+//   interface Window {
+//     ethereum?: unknown;
+//   }
+// }
 
 export default function Dashboard() {
   const router = useRouter();
@@ -117,7 +117,7 @@ export default function Dashboard() {
                   patientAddress={address}
                 />
               ) : (
-                <DentistMode provider={provider} />
+                <DentistMode />
               )}
             </div>
             <div className="mt-4 lg:mt-0">

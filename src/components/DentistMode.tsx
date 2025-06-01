@@ -5,8 +5,6 @@ import React, { useState } from "react";
 import { DentalRecord as DentalRecordBase, DentalNote, Treatment, XRay, AttachedDocument } from "../types/dental";
 import { AnimatedCard } from "./AnimatedCard";
 
-interface DentistModeProps extends Record<string, unknown> {}
-
 // Agregar tipo para citas
 interface Appointment {
   id: string;
@@ -43,9 +41,7 @@ interface DentalRecord extends DentalRecordBase {
   appointments?: Appointment[];
 }
 
-export const DentistMode: React.FC<DentistModeProps> = ({
-  // provider, // Comentado por no uso
-}) => {
+export const DentistMode: React.FC = () => {
   const [patientAddress, setPatientAddress] = useState("");
   const [record, setRecord] = useState<DentalRecord | null>(null);
   const [loading, setLoading] = useState(false);
