@@ -6,7 +6,7 @@ import { Navbar } from '../components/Navbar';
 // import { DentalCard } from '../components/DentalCard';
 // import { PatientMode } from '../components/PatientMode';
 import { ethers } from 'ethers';
-import { DentalRecord } from '../types/dental';
+// import { DentalRecord } from '../types/dental';
 // import { DentistMode } from '../components/DentistMode';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -24,11 +24,12 @@ const contractAddress = "0xe3B1B985422E56Da480af78238C3bc4B82f1965B";
 // const WESTEND_CHAIN_ID = 420420421;
 const WESTEND_CHAIN_ID_HEX = '0x191d4555';
 
-declare global {
-  interface Window {
-    ethereum?: any;
-  }
-}
+// declare global {
+//   interface Window {
+//     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+//     ethereum?: unknown;
+//   }
+// }
 
 export default function Landing() {
   const router = useRouter();

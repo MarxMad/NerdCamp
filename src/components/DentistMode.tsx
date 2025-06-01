@@ -1,13 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { ethers } from "ethers";
+// import { ethers } from "ethers"; // Comentado por no uso
 import { DentalRecord as DentalRecordBase, DentalNote, Treatment, XRay, AttachedDocument } from "../types/dental";
 import { AnimatedCard } from "./AnimatedCard";
 
-interface DentistModeProps {
-  // provider?: ethers.providers.Web3Provider; // Comentado por no uso
-}
+interface DentistModeProps extends Record<string, unknown> {}
 
 // Agregar tipo para citas
 interface Appointment {

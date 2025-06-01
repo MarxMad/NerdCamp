@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useDisconnect } from 'wagmi';
+// import { useDisconnect } from 'wagmi';
 import { ethers } from 'ethers';
 
 interface WalletConnectProps {

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { WalletConnect } from './WalletConnect';
-import { useRouter } from 'next/navigation';
+// import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { ethers } from 'ethers';
 
@@ -21,7 +21,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   // const router = useRouter();
   const [isClient, setIsClient] = useState(false);
-  const [error, setError] = useState('');
+  // const [error, setError] = useState('');
   // const [walletConnected, setWalletConnected] = useState(false);
 
   useEffect(() => {
@@ -69,7 +69,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                   
                 </div>
-                {error && <span className="ml-2 text-red-500 text-sm">{error}</span>}
+                {/* error && <span className="ml-2 text-red-500 text-sm">{error}</span> */}
               </>
             ) : showLoginButton ? null : (
               <>
