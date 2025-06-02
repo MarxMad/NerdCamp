@@ -1,115 +1,128 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DentalRecord as DentalRecordType } from '../types/dental';
 import { ethers } from 'ethers';
 import { motion, AnimatePresence } from 'framer-motion';
 import { theme } from '../styles/theme';
 import { AnimatedCard } from './AnimatedCard';
+import { useAccount } from 'wagmi';
 
 interface PatientModeProps {
-  record: DentalRecordType;
   provider?: ethers.providers.Web3Provider;
   patientAddress?: string;
 }
 
+interface ExpedienteDocumento {
+  ipfsHash: string;
+  timestamp: number;
+  dentista: string;
+  data: any; // Puedes tipar esto mejor si sabes la estructura
+}
+
 export const PatientMode: React.FC<PatientModeProps> = ({
-  record,
   provider,
-  // patientAddress, // Comentado por no uso
+  patientAddress,
 }) => {
-  const [activeTab, setActiveTab] = useState<'record' | 'access' | 'history' | 'dentists' | 'studies' | 'calendar' | 'stats'>('record');
-  // const [newNote, setNewNote] = useState('');
-  const [dentistAddress, setDentistAddress] = useState('');
-  // const [accessDays, setAccessDays] = useState(7); // Comentado por no uso
-  const [isGrantingAccess, setIsGrantingAccess] = useState(false);
+  const { address } = useAccount();
+  const [record, setRecord] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'record' | 'access' | 'history' | 'dentists' | 'studies' | 'calendar' | 'stats'>('record');
+  const [dentistAddress, setDentistAddress] = useState('');
+  const [isGrantingAccess, setIsGrantingAccess] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [documentos, setDocumentos] = useState<ExpedienteDocumento[]>([]);
+  const [detalle, setDetalle] = useState<ExpedienteDocumento | null>(null);
 
-  // Datos de ejemplo para dentistas
-  const dentists = [
-    {
-      id: '1',
-      name: 'Dr. García',
-      specialty: 'Ortodoncista',
-      address: '0x456...',
-      rating: 4.8,
-      lastVisit: '2024-03-15',
-      image: 'https://placehold.co/100x100',
-      isVerified: true
-    },
-    {
-      id: '2',
-      name: 'Dra. Martínez',
-      specialty: 'Endodoncista',
-      address: '0x789...',
-      rating: 4.9,
-      lastVisit: '2024-02-20',
-      image: 'https://placehold.co/100x100',
-      isVerified: true
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    try {
+      const expedientes = JSON.parse(localStorage.getItem('expedientes') || '[]');
+      // Buscar expediente por wallet (address)
+      const expediente = expedientes.find((exp: any) => exp.paciente?.toLowerCase() === (address || '').toLowerCase());
+      if (expediente) {
+        setRecord(expediente);
+      } else {
+        setRecord(null);
+      }
+    } catch (err) {
+      setError('No se pudo cargar el expediente local.');
+      setRecord(null);
     }
-  ];
+    setLoading(false);
+  }, [address]);
 
-  // Datos de ejemplo para estudios
-  const studies = [
-    {
-      id: '1',
-      type: 'Radiografía Panorámica',
-      date: '2024-03-15',
-      description: 'Radiografía completa de la mandíbula',
-      image: 'https://placehold.co/400x300',
-      findings: 'No se observan anomalías significativas',
-      recommendations: 'Continuar con el plan de tratamiento actual'
-    },
-    {
-      id: '2',
-      type: 'TAC Dental',
-      date: '2024-02-20',
-      description: 'Tomografía axial computarizada',
-      image: 'https://placehold.co/400x300',
-      findings: 'Visualización detallada de la estructura ósea',
-      recommendations: 'Seguimiento en 6 meses'
+  // Nuevo: Escuchar cambios en localStorage (evento 'storage')
+  useEffect(() => {
+    function handleStorageChange(e: StorageEvent) {
+      if (e.key === 'expedientes') {
+        try {
+          const expedientes = JSON.parse(localStorage.getItem('expedientes') || '[]');
+          const expediente = expedientes.find((exp: any) => exp.paciente?.toLowerCase() === (address || '').toLowerCase());
+          setRecord(expediente || null);
+        } catch {
+          setRecord(null);
+        }
+      }
     }
-  ];
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [address]);
 
-  // Datos de ejemplo para citas
-  const appointments = [
-    {
-      id: '1',
-      date: '2024-04-15',
-      time: '10:00',
-      type: 'Limpieza Dental',
-      dentist: 'Dr. García',
-      status: 'confirmada'
-    },
-    {
-      id: '2',
-      date: '2024-04-20',
-      time: '15:30',
-      type: 'Revisión Ortodoncia',
-      dentist: 'Dra. Martínez',
-      status: 'pendiente'
-    }
-  ];
+  useEffect(() => {
+    const fetchExpedientes = async () => {
+      if (!provider || !patientAddress) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const signer = provider.getSigner();
+        const contractAddress = "0xe3B1B985422E56Da480af78238C3bc4B82f1965B";
+        const contractABI = (await import('../abi/MyDentalVault.json')).default;
+        const contract = new ethers.Contract(contractAddress, contractABI, signer);
+        // Leer eventos DocumentoReferenciado
+        const filter = contract.filters.DocumentoReferenciado(patientAddress);
+        const logs = await contract.queryFilter(filter);
+        const expedientes: ExpedienteDocumento[] = await Promise.all(
+          logs.map(async (log: any) => {
+            const ipfsHashBytes32 = log.args.ipfsHash;
+            const timestamp = log.args.timestamp.toNumber();
+            const dentista = log.args.dentista;
+            // Convertir bytes32 a hash base58 (CID)
+            const ipfsHash = bytes32ToIpfsHash(ipfsHashBytes32);
+            // Consultar IPFS
+            let data = null;
+            try {
+              const res = await fetch(`https://ipfs.io/ipfs/${ipfsHash}`);
+              data = await res.json();
+            } catch (e) {
+              data = null;
+            }
+            return { ipfsHash, timestamp, dentista, data };
+          })
+        );
+        setDocumentos(expedientes);
+      } catch (err: unknown) {
+        setError('No se pudo cargar la lista de expedientes.');
+        setDocumentos([]);
+      }
+      setLoading(false);
+    };
+    fetchExpedientes();
+  }, [provider, patientAddress]);
 
-  // Datos de ejemplo para estadísticas
-  const healthStats = {
-    visitsLastYear: 6,
-    treatmentsCompleted: 3,
-    nextAppointment: '2024-04-15',
-    hygieneScore: 85,
-    monthlyProgress: [
-      { month: 'Ene', score: 75 },
-      { month: 'Feb', score: 80 },
-      { month: 'Mar', score: 85 },
-      { month: 'Abr', score: 90 }
-    ],
-    habits: [
-      { name: 'Cepillado Diario', completed: 28, total: 30 },
-      { name: 'Uso de Hilo Dental', completed: 25, total: 30 },
-      { name: 'Enjuague Bucal', completed: 30, total: 30 }
-    ]
-  };
+  // Función para convertir bytes32 a hash base58 (CID)
+  function bytes32ToIpfsHash(bytes32: string): string {
+    // Si tus hashes en el contrato ya están en formato CID, solo retorna el valor
+    // Si están en bytes32, necesitas convertirlos (esto es un ejemplo, puede requerir ajuste)
+    // Aquí se asume que el hash es CIDv0 (Qm...)
+    // Si usas CIDv1, la conversión es diferente
+    // Puedes usar la librería 'multiformats' para una conversión robusta
+    if (bytes32.startsWith('Qm')) return bytes32; // Ya es CID
+    // Si no, retorna como string hexadecimal (no ideal, pero placeholder)
+    return bytes32;
+  }
 
   const handleGrantAccess = async () => {
     if (!provider) {
@@ -131,6 +144,20 @@ export const PatientMode: React.FC<PatientModeProps> = ({
       await tx.wait();
       setDentistAddress('');
       setError(null);
+      // --- Simulación: guardar acceso en localStorage para la demo ---
+      const expedientes = JSON.parse(localStorage.getItem('expedientes') || '[]');
+      const idx = expedientes.findIndex((exp) => exp.paciente?.toLowerCase() === (address || '').toLowerCase());
+      if (idx !== -1) {
+        expedientes[idx].accessGrants = expedientes[idx].accessGrants || [];
+        expedientes[idx].accessGrants.push({
+          dentistAddress,
+          grantedAt: new Date().toISOString(),
+          isActive: true
+        });
+        localStorage.setItem('expedientes', JSON.stringify(expedientes));
+        window.dispatchEvent(new StorageEvent('storage', { key: 'expedientes' }));
+        setRecord({ ...expedientes[idx] }); // Actualiza el estado local inmediatamente
+      }
       alert('¡Acceso otorgado correctamente!');
     } catch (err: unknown) {
       const errorObj = err as { reason?: string; message?: string };
@@ -169,7 +196,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
       days.push(
         <div key={day} className="h-24 border border-gray-200 p-2">
           <span className="text-sm text-gray-500">{day}</span>
-          {dayAppointments.map(app => (
+          {dayAppointments.map((app: any) => (
             <div
               key={app.id}
               className={`mt-1 p-1 text-xs rounded ${
@@ -189,6 +216,10 @@ export const PatientMode: React.FC<PatientModeProps> = ({
   };
 
   const renderTabContent = () => {
+    if (loading) return <div className="p-6 text-center">Cargando expediente...</div>;
+    if (error) return <div className="p-6 text-center text-red-500">{error}</div>;
+    if (!record) return <div className="p-6 text-center">No hay expediente disponible.</div>;
+
     return (
       <AnimatePresence mode="wait">
         <motion.div
@@ -200,131 +231,21 @@ export const PatientMode: React.FC<PatientModeProps> = ({
           className="mt-6"
         >
           {activeTab === 'record' && (
-            <div className="space-y-6">
-              <AnimatedCard className="p-6 bg-gradient-to-r from-blue-50 to-purple-50">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">Datos Personales</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-gray-800"><span className="font-medium">Nombre:</span> {record.patientInfo.nombre}</p>
-                    <p className="text-gray-800"><span className="font-medium">Fecha de nacimiento:</span> {record.patientInfo.fechaNacimiento} ({record.patientInfo.edad} años)</p>
-                    <p className="text-gray-800"><span className="font-medium">Género:</span> {record.patientInfo.genero}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-800"><span className="font-medium">Dirección:</span> {record.patientInfo.direccion}</p>
-                    <p className="text-gray-800"><span className="font-medium">Contacto:</span> {record.patientInfo.contacto}</p>
-                    {record.patientInfo.numeroSeguro && <p className="text-gray-800"><span className="font-medium">Seguro:</span> {record.patientInfo.numeroSeguro}</p>}
-                  </div>
-                </div>
-              </AnimatedCard>
-
-              <AnimatedCard className="p-6">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">Información General de Salud</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-gray-800"><span className="font-medium">Alergias:</span> {record.healthInfo.alergias.join(', ') || 'Ninguna'}</p>
-                    <p className="text-gray-800"><span className="font-medium">Enfermedades crónicas:</span> {record.healthInfo.enfermedadesCronicas.join(', ') || 'Ninguna'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-800"><span className="font-medium">Medicamentos:</span> {record.healthInfo.medicamentos.join(', ') || 'Ninguno'}</p>
-                    <p className="text-gray-800"><span className="font-medium">Antecedentes:</span> {record.healthInfo.antecedentes || 'Ninguno'}</p>
-                  </div>
-                </div>
-              </AnimatedCard>
-
-              <AnimatedCard className="p-6 bg-gradient-to-r from-blue-50 to-purple-50">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">Historial Dental y Observaciones</h3>
-                <div className="space-y-2">
-                  <p className="text-gray-800"><span className="font-medium">Última revisión:</span> {record.lastCheckup}</p>
-                  {record.generalObservation.map((obs, idx) => (
-                    <div key={idx} className="border-l-4 border-blue-400 pl-4 my-2">
-                      <p className="text-sm text-gray-800">{obs.observaciones}</p>
-                      <p className="text-xs text-gray-500">{obs.fecha} — Dr. {obs.doctor}</p>
-                    </div>
-                  ))}
-                </div>
-              </AnimatedCard>
-
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Tratamientos Realizados</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {record.treatments.map((treatment) => (
-                    <AnimatedCard key={treatment.id} className="p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-medium text-gray-900">{treatment.type}</p>
-                          <p className="text-sm text-gray-500">{treatment.date}</p>
-                        </div>
-                        <span className="text-sm text-gray-500">Dr. {treatment.dentist}</span>
-                      </div>
-                      <p className="mt-2 text-gray-800">{treatment.description}</p>
-                      <span className={`inline-block mt-2 px-2 py-1 rounded text-xs ${
-                        treatment.status === 'completado' ? 'bg-green-100 text-green-800' : treatment.status === 'en curso' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {treatment.status.charAt(0).toUpperCase() + treatment.status.slice(1)}
-                      </span>
-                    </AnimatedCard>
-                  ))}
-                </div>
+            <div className="text-center py-8 space-y-4">
+              <h2 className="text-2xl font-bold text-blue-900 mb-4">Expediente del Paciente</h2>
+              <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto text-left">
+                <p><span className="font-semibold text-gray-900">Nombre:</span> <span className="text-gray-800">{record.datos?.nombre}</span></p>
+                <p><span className="font-semibold text-gray-900">Fecha de nacimiento:</span> <span className="text-gray-800">{record.datos?.fechaNacimiento}</span></p>
+                <p><span className="font-semibold text-gray-900">Edad:</span> <span className="text-gray-800">{record.datos?.edad}</span></p>
+                <p><span className="font-semibold text-gray-900">Género:</span> <span className="text-gray-800">{record.datos?.genero}</span></p>
+                <p><span className="font-semibold text-gray-900">Dirección:</span> <span className="text-gray-800">{record.datos?.direccion}</span></p>
+                <p><span className="font-semibold text-gray-900">Contacto:</span> <span className="text-gray-800">{record.datos?.contacto}</span></p>
+                <p><span className="font-semibold text-gray-900">Número de Seguro:</span> <span className="text-gray-800">{record.datos?.numeroSeguro}</span></p>
+                <p><span className="font-semibold text-gray-900">Alergias:</span> <span className="text-gray-800">{record.datos?.alergias?.join(', ') || 'Ninguna'}</span></p>
+                <p><span className="font-semibold text-gray-900">Enfermedades crónicas:</span> <span className="text-gray-800">{record.datos?.enfermedadesCronicas?.join(', ') || 'Ninguna'}</span></p>
+                <p><span className="font-semibold text-gray-900">Medicamentos:</span> <span className="text-gray-800">{record.datos?.medicamentos?.join(', ') || 'Ninguno'}</span></p>
+                <p><span className="font-semibold text-gray-900">Antecedentes:</span> <span className="text-gray-800">{record.datos?.antecedentes || 'Ninguno'}</span></p>
               </div>
-
-              <AnimatedCard className="p-6">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">Plan de Tratamiento Actual</h3>
-                <p className="text-gray-800">{record.currentTreatmentPlan}</p>
-              </AnimatedCard>
-
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Radiografías y Estudios</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {record.xRays.map((xray) => (
-                    <AnimatedCard key={xray.id} className="p-4">
-                      <p className="font-medium text-gray-900">{xray.type}</p>
-                      <p className="text-sm text-gray-500">{xray.date}</p>
-                      <p className="mt-2 text-gray-800">{xray.description}</p>
-                      <a
-                        href={`https://ipfs.io/ipfs/${xray.ipfsHash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-3 text-blue-600 hover:text-blue-800 font-medium block"
-                      >
-                        Ver archivo
-                      </a>
-                    </AnimatedCard>
-                  ))}
-                </div>
-              </div>
-
-              <AnimatedCard className="p-6">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">Notas y Recomendaciones</h3>
-                <div className="space-y-2">
-                  {record.notes.map((note) => (
-                    <div key={note.id} className="border-l-4 border-purple-400 pl-4 my-2">
-                      <p className="text-sm text-gray-800">{note.content}</p>
-                      <p className="text-xs text-gray-500">{note.date} — Dr. {note.dentist}</p>
-                    </div>
-                  ))}
-                </div>
-              </AnimatedCard>
-
-              <AnimatedCard className="p-6">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">Documentos Adjuntos</h3>
-                <div className="space-y-2">
-                  {record.attachedDocuments.length === 0 && <p className="text-gray-500">No hay documentos adjuntos.</p>}
-                  {record.attachedDocuments.map((doc) => (
-                    <div key={doc.id} className="flex items-center gap-2">
-                      <span className="font-medium text-gray-800">{doc.name}</span>
-                      <a
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        Ver documento
-                      </a>
-                      <span className="text-xs text-gray-400">{doc.type} — {doc.uploadedAt}</span>
-                    </div>
-                  ))}
-                </div>
-              </AnimatedCard>
             </div>
           )}
 
@@ -367,7 +288,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
               <AnimatedCard className="p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Próximas Citas</h3>
                 <div className="space-y-4">
-                  {appointments.map(appointment => (
+                  {appointments.map((appointment: any) => (
                     <motion.div
                       key={appointment.id}
                       whileHover={{ scale: 1.02 }}
@@ -438,7 +359,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Progreso Mensual</h3>
                 <div className="h-64">
                   <div className="flex items-end h-48 space-x-4">
-                    {healthStats.monthlyProgress.map((item, index) => (
+                    {healthStats.monthlyProgress.map((item: any, index: number) => (
                       <motion.div
                         key={index}
                         initial={{ height: 0 }}
@@ -449,7 +370,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
                     ))}
                   </div>
                   <div className="flex justify-between mt-2">
-                    {healthStats.monthlyProgress.map((item, index) => (
+                    {healthStats.monthlyProgress.map((item: any, index: number) => (
                       <span key={index} className="text-sm text-gray-500">{item.month}</span>
                     ))}
                   </div>
@@ -459,7 +380,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
               <AnimatedCard className="p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Hábitos de Higiene</h3>
                 <div className="space-y-4">
-                  {healthStats.habits.map((habit, index) => (
+                  {healthStats.habits.map((habit: any, index: number) => (
                     <motion.div
                       key={index}
                       initial={{ opacity: 0, x: -20 }}
@@ -488,69 +409,27 @@ export const PatientMode: React.FC<PatientModeProps> = ({
           )}
 
           {activeTab === 'dentists' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {dentists.map((dentist) => (
-                  <div key={dentist.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-                    <div className="flex items-start space-x-4">
-                      <img
-                        src={dentist.image}
-                        alt={dentist.name}
-                        className="w-20 h-20 rounded-full object-cover"
-                      />
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900">{dentist.name}</h3>
-                            <p className="text-sm text-gray-500">{dentist.specialty}</p>
-                          </div>
-                          {dentist.isVerified && (
-                            <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
-                              Verificado
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-2 flex items-center">
-                          <div className="flex items-center">
-                            {[...Array(5)].map((_, i) => (
-                              <svg
-                                key={i}
-                                className={`w-4 h-4 ${
-                                  i < Math.floor(dentist.rating)
-                                    ? 'text-yellow-400'
-                                    : 'text-gray-300'
-                                }`}
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                              >
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                              </svg>
-                            ))}
-                            <span className="ml-2 text-sm text-gray-600">{dentist.rating}</span>
-                          </div>
-                        </div>
-                        <p className="mt-2 text-sm text-gray-500">
-                          Última visita: {new Date(dentist.lastVisit).toLocaleDateString()}
-                        </p>
-                        <div className="mt-4 flex space-x-3">
-                          <button className="text-blue-600 hover:text-blue-800 font-medium text-sm">
-                            Ver Perfil →
-                          </button>
-                          <button className="text-blue-600 hover:text-blue-800 font-medium text-sm">
-                            Agendar Cita →
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+            record?.accessGrants?.length > 0 ? (
+              <div className="space-y-6 max-w-xl mx-auto">
+                <h3 className="text-lg font-semibold text-blue-900 mb-4">Dentistas con Acceso</h3>
+                {record.accessGrants.map((grant: any, idx: number) => (
+                  <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
+                    <div className="font-medium text-gray-900">Dentista: <span className="text-gray-800">{grant.dentistAddress}</span></div>
+                    <div className="text-sm text-gray-700">Otorgado: {new Date(grant.grantedAt).toLocaleString()}</div>
+                    <div className="text-green-600 text-xs font-semibold">{grant.isActive ? 'Activo' : 'Expirado'}</div>
                   </div>
                 ))}
               </div>
-            </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto text-gray-500">No hay dentistas con acceso</div>
+              </div>
+            )
           )}
 
           {activeTab === 'studies' && (
             <div className="space-y-6">
-              {studies.map((study) => (
+              {studies.map((study: any) => (
                 <div key={study.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                   <div className="p-6">
                     <div className="flex justify-between items-start">
@@ -590,24 +469,20 @@ export const PatientMode: React.FC<PatientModeProps> = ({
 
           {activeTab === 'access' && (
             <div className="space-y-6">
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <div className="bg-white border border-gray-200 rounded-lg p-6 max-w-md mx-auto">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Otorgar Acceso a Dentista</h3>
                 <div className="space-y-4">
-                  <div className="flex gap-4 items-end">
-                    <div className="flex-1">
-                      <input
-                        type="text"
-                        placeholder="Dirección del dentista"
-                        className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 placeholder-gray-700"
-                        value={dentistAddress}
-                        onChange={(e) => setDentistAddress(e.target.value)}
-                      />
-                    </div>
-                  </div>
+                  <input
+                    type="text"
+                    placeholder="Dirección del dentista"
+                    className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black placeholder-gray-700"
+                    value={dentistAddress}
+                    onChange={(e) => setDentistAddress(e.target.value)}
+                  />
                   <button
                     onClick={handleGrantAccess}
-                    disabled={isGrantingAccess}
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                    disabled={isGrantingAccess || !dentistAddress}
+                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                   >
                     {isGrantingAccess ? 'Procesando...' : 'Otorgar Acceso'}
                   </button>
@@ -616,60 +491,72 @@ export const PatientMode: React.FC<PatientModeProps> = ({
                   )}
                 </div>
               </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Accesos Activos</h3>
-                <div className="space-y-4">
-                  {record.accessGrants.map((grant, index) => (
-                    <div key={index} className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="font-medium text-gray-900">Dentista: {grant.dentistAddress}</p>
-                          <p className="text-sm text-gray-500">
-                            Otorgado: {new Date(grant.grantedAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-sm ${
-                          grant.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {grant.isActive ? 'Activo' : 'Expirado'}
-                        </span>
-                      </div>
+              {/* Mostrar accesos activos si existen, si no, mensaje claro */}
+              {record?.accessGrants?.length > 0 ? (
+                <div className="mt-6 max-w-md mx-auto">
+                  <h4 className="font-semibold mb-2 text-gray-900">Accesos Activos</h4>
+                  {record.accessGrants.map((grant: any, idx: number) => (
+                    <div key={idx} className="border rounded p-2 mb-2 bg-white">
+                      <div className="text-gray-900 font-medium">Dentista: <span className="text-gray-800 font-normal">{grant.dentistAddress}</span></div>
+                      <div className="text-gray-900 font-medium">Otorgado: <span className="text-gray-800 font-normal">{new Date(grant.grantedAt).toLocaleString()}</span></div>
+                      <div className="text-green-600 text-xs font-semibold">{grant.isActive ? 'Activo' : 'Expirado'}</div>
                     </div>
                   ))}
                 </div>
-              </div>
+              ) : (
+                <div className="mt-6 max-w-md mx-auto text-center text-gray-500">No hay accesos registrados</div>
+              )}
             </div>
           )}
 
           {activeTab === 'history' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Historial de Accesos</h3>
+            record?.accessGrants?.length > 0 ? (
+              <div className="space-y-6 max-w-xl mx-auto">
+                <h3 className="text-lg font-semibold text-blue-900 mb-4">Historial de Accesos</h3>
+                {record.accessGrants.map((grant: any, idx: number) => (
+                  <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
+                    <div className="font-medium text-gray-900">Dentista: <span className="text-gray-800">{grant.dentistAddress}</span></div>
+                    <div className="text-sm text-gray-700">Otorgado: {new Date(grant.grantedAt).toLocaleString()}</div>
+                    <div className="text-green-600 text-xs font-semibold">{grant.isActive ? 'Activo' : 'Expirado'}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto text-gray-500">No hay historial disponible</div>
+              </div>
+            )
+          )}
+
+          {activeTab === 'calendar' && (
+            record?.appointments?.length > 0 ? (
+              <div className="space-y-6 max-w-xl mx-auto">
+                <h3 className="text-lg font-semibold text-blue-900 mb-4">Citas Programadas</h3>
                 <div className="space-y-4">
-                  {record.accessGrants.map((grant, index) => (
-                    <div key={index} className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="font-medium text-gray-900">Dentista: {grant.dentistAddress}</p>
-                          <p className="text-sm text-gray-500">
-                            Otorgado: {new Date(grant.grantedAt).toLocaleDateString()}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            Expira: {new Date(grant.expiresAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-sm ${
-                          grant.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {grant.isActive ? 'Activo' : 'Expirado'}
-                        </span>
+                  {record.appointments.map((appointment: any) => (
+                    <div key={appointment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="font-medium text-gray-900">{appointment.type}</p>
+                        <p className="text-sm text-gray-500">{appointment.date} - {appointment.time}</p>
+                        <p className="text-sm text-gray-500">Dentista: {appointment.dentist}</p>
+                        <p className="text-xs text-gray-500">{appointment.description}</p>
                       </div>
+                      <span className={`px-3 py-1 rounded-full text-sm ${
+                        appointment.status === 'confirmada'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {appointment.status === 'confirmada' ? 'Confirmada' : 'Pendiente'}
+                      </span>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto text-gray-500">No hay citas programadas</div>
+              </div>
+            )
           )}
         </motion.div>
       </AnimatePresence>
@@ -687,29 +574,176 @@ export const PatientMode: React.FC<PatientModeProps> = ({
     { key: 'history', label: 'Historial' },
   ];
 
+  // Renderizado principal
   return (
-    <div className="space-y-6">
-      <div className="border-b border-gray-200">
-        <nav className="flex gap-4 py-2">
-          {tabs.map(({ key, label }) => (
-            <motion.button
-              key={key}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setActiveTab(key as 'record' | 'access' | 'history' | 'dentists' | 'studies' | 'calendar' | 'stats')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                activeTab === key
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow'
-                  : 'bg-gray-100 text-gray-800'
-              }`}
-            >
-              {label}
-            </motion.button>
-          ))}
-        </nav>
+    <div className="space-y-8">
+      <div className="flex gap-4 mb-4">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key as typeof activeTab)}
+            className={`px-4 py-2 rounded-lg font-medium ${activeTab === tab.key ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' : 'bg-gray-100 text-gray-800'}`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
-
-      {renderTabContent()}
+      <div className="p-6">
+        {activeTab === 'record' && (
+          record ? (
+            <div className="text-center py-8 space-y-4">
+              <h2 className="text-2xl font-bold text-blue-900 mb-4">Expediente del Paciente</h2>
+              <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto text-left">
+                <p><span className="font-semibold text-gray-900">Nombre:</span> <span className="text-gray-800">{record.datos?.nombre}</span></p>
+                <p><span className="font-semibold text-gray-900">Fecha de nacimiento:</span> <span className="text-gray-800">{record.datos?.fechaNacimiento}</span></p>
+                <p><span className="font-semibold text-gray-900">Edad:</span> <span className="text-gray-800">{record.datos?.edad}</span></p>
+                <p><span className="font-semibold text-gray-900">Género:</span> <span className="text-gray-800">{record.datos?.genero}</span></p>
+                <p><span className="font-semibold text-gray-900">Dirección:</span> <span className="text-gray-800">{record.datos?.direccion}</span></p>
+                <p><span className="font-semibold text-gray-900">Contacto:</span> <span className="text-gray-800">{record.datos?.contacto}</span></p>
+                <p><span className="font-semibold text-gray-900">Número de Seguro:</span> <span className="text-gray-800">{record.datos?.numeroSeguro}</span></p>
+                <p><span className="font-semibold text-gray-900">Alergias:</span> <span className="text-gray-800">{record.datos?.alergias?.join(', ') || 'Ninguna'}</span></p>
+                <p><span className="font-semibold text-gray-900">Enfermedades crónicas:</span> <span className="text-gray-800">{record.datos?.enfermedadesCronicas?.join(', ') || 'Ninguna'}</span></p>
+                <p><span className="font-semibold text-gray-900">Medicamentos:</span> <span className="text-gray-800">{record.datos?.medicamentos?.join(', ') || 'Ninguno'}</span></p>
+                <p><span className="font-semibold text-gray-900">Antecedentes:</span> <span className="text-gray-800">{record.datos?.antecedentes || 'Ninguno'}</span></p>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto text-gray-500">No hay expediente disponible</div>
+            </div>
+          )
+        )}
+        {activeTab === 'history' && (
+          record?.accessGrants?.length > 0 ? (
+            <div className="space-y-6 max-w-xl mx-auto">
+              <h3 className="text-lg font-semibold text-blue-900 mb-4">Historial de Accesos</h3>
+              {record.accessGrants.map((grant: any, idx: number) => (
+                <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
+                  <div className="font-medium text-gray-900">Dentista: <span className="text-gray-800">{grant.dentistAddress}</span></div>
+                  <div className="text-sm text-gray-700">Otorgado: {new Date(grant.grantedAt).toLocaleString()}</div>
+                  <div className="text-green-600 text-xs font-semibold">{grant.isActive ? 'Activo' : 'Expirado'}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto text-gray-500">No hay historial disponible</div>
+            </div>
+          )
+        )}
+        {activeTab === 'studies' && (
+          record?.documentos?.length > 0 ? (
+            <div className="space-y-6 max-w-xl mx-auto">
+              <h3 className="text-lg font-semibold text-blue-900 mb-4">Estudios</h3>
+              {/* Renderiza aquí los estudios reales si existen */}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto text-gray-500">No hay estudios disponibles</div>
+            </div>
+          )
+        )}
+        {activeTab === 'calendar' && (
+          record?.appointments?.length > 0 ? (
+            <div className="space-y-6 max-w-xl mx-auto">
+              <h3 className="text-lg font-semibold text-blue-900 mb-4">Citas Programadas</h3>
+              <div className="space-y-4">
+                {record.appointments.map((appointment: any) => (
+                  <div key={appointment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="font-medium text-gray-900">{appointment.type}</p>
+                      <p className="text-sm text-gray-500">{appointment.date} - {appointment.time}</p>
+                      <p className="text-sm text-gray-500">Dentista: {appointment.dentist}</p>
+                      <p className="text-xs text-gray-500">{appointment.description}</p>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-sm ${
+                      appointment.status === 'confirmada'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {appointment.status === 'confirmada' ? 'Confirmada' : 'Pendiente'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto text-gray-500">No hay citas programadas</div>
+            </div>
+          )
+        )}
+        {activeTab === 'stats' && (
+          record?.estadisticas ? (
+            <div className="space-y-6 max-w-xl mx-auto">
+              <h3 className="text-lg font-semibold text-blue-900 mb-4">Estadísticas</h3>
+              {/* Renderiza aquí las estadísticas reales si existen */}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto text-gray-500">No hay estadísticas disponibles</div>
+            </div>
+          )
+        )}
+        {activeTab === 'dentists' && (
+          record?.accessGrants?.length > 0 ? (
+            <div className="space-y-6 max-w-xl mx-auto">
+              <h3 className="text-lg font-semibold text-blue-900 mb-4">Dentistas con Acceso</h3>
+              {record.accessGrants.map((grant: any, idx: number) => (
+                <div key={idx} className="bg-white border border-gray-200 rounded-lg p-4">
+                  <div className="font-medium text-gray-900">Dentista: <span className="text-gray-800">{grant.dentistAddress}</span></div>
+                  <div className="text-sm text-gray-700">Otorgado: {new Date(grant.grantedAt).toLocaleString()}</div>
+                  <div className="text-green-600 text-xs font-semibold">{grant.isActive ? 'Activo' : 'Expirado'}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto text-gray-500">No hay dentistas con acceso</div>
+            </div>
+          )
+        )}
+        {activeTab === 'access' && (
+          <div className="space-y-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-6 max-w-md mx-auto">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Otorgar Acceso a Dentista</h3>
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  placeholder="Dirección del dentista"
+                  className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black placeholder-gray-700"
+                  value={dentistAddress}
+                  onChange={(e) => setDentistAddress(e.target.value)}
+                />
+                <button
+                  onClick={handleGrantAccess}
+                  disabled={isGrantingAccess || !dentistAddress}
+                  className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                >
+                  {isGrantingAccess ? 'Procesando...' : 'Otorgar Acceso'}
+                </button>
+                {error && (
+                  <p className="text-red-500 text-sm">{error}</p>
+                )}
+              </div>
+            </div>
+            {record?.accessGrants?.length > 0 ? (
+              <div className="mt-6 max-w-md mx-auto">
+                <h4 className="font-semibold mb-2 text-gray-900">Accesos Activos</h4>
+                {record.accessGrants.map((grant: any, idx: number) => (
+                  <div key={idx} className="border rounded p-2 mb-2 bg-white">
+                    <div className="text-gray-900 font-medium">Dentista: <span className="text-gray-800 font-normal">{grant.dentistAddress}</span></div>
+                    <div className="text-gray-900 font-medium">Otorgado: <span className="text-gray-800 font-normal">{new Date(grant.grantedAt).toLocaleString()}</span></div>
+                    <div className="text-green-600 text-xs font-semibold">{grant.isActive ? 'Activo' : 'Expirado'}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-6 max-w-md mx-auto text-center text-gray-500">No hay accesos registrados</div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }; 

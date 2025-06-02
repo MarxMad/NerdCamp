@@ -1,9 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
-// import { ethers } from "ethers"; // Comentado por no uso
+import React, { useState, useEffect } from "react";
 import { DentalRecord as DentalRecordBase, DentalNote, Treatment, XRay, AttachedDocument } from "../types/dental";
 import { AnimatedCard } from "./AnimatedCard";
+import { useAccount } from 'wagmi';
+import { ethers } from 'ethers';
+import contractABI from '../abi/MyDentalVault.json';
+const contractAddress = "0xe3B1B985422E56Da480af78238C3bc4B82f1965B";
 
 // Agregar tipo para citas
 interface Appointment {
@@ -15,26 +18,6 @@ interface Appointment {
   status: 'confirmada' | 'pendiente';
   description: string;
 }
-
-// Simulación de pacientes con acceso
-const mockPatients = [
-  {
-    address: '0xabc123',
-    nombre: 'Juan Pérez',
-    lastCheckup: '2024-04-01',
-  },
-  {
-    address: '0xdef456',
-    nombre: 'Ana López',
-    lastCheckup: '2024-03-20',
-  },
-];
-
-// Simulación de historial de accesos
-const mockAccessHistory = [
-  { id: '1', patient: 'Juan Pérez', address: '0xabc123', date: '2024-04-10', action: 'Visualización de expediente' },
-  { id: '2', patient: 'Ana López', address: '0xdef456', date: '2024-04-09', action: 'Subida de documento' },
-];
 
 // Extender el tipo DentalRecord para incluir appointments opcional
 interface DentalRecord extends DentalRecordBase {
@@ -72,6 +55,7 @@ export const DentistMode: React.FC = () => {
   // Nuevo estado para crear expediente
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newRecord, setNewRecord] = useState({
+    walletPaciente: '',
     nombre: '',
     fechaNacimiento: '',
     edad: '',
@@ -88,54 +72,73 @@ export const DentistMode: React.FC = () => {
   // Nuevo estado para pestañas
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
 
+  const { address } = useAccount();
+  const [loadingExpediente, setLoadingExpediente] = useState(false);
+  const [errorExpediente, setErrorExpediente] = useState<string | null>(null);
+  const [successExpediente, setSuccessExpediente] = useState<string | null>(null);
+
+  const [expedientes, setExpedientes] = useState<any[]>([]);
+  const [selectedExpediente, setSelectedExpediente] = useState<any | null>(null);
+
+  // Cargar expedientes al montar el componente
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    try {
+      const todosExpedientes = JSON.parse(localStorage.getItem('expedientes') || '[]');
+      // Filtrar expedientes por el dentista conectado
+      const expedientesFiltrados = todosExpedientes.filter((exp: any) => 
+        exp.dentista?.toLowerCase() === (address || '').toLowerCase()
+      );
+      setExpedientes(expedientesFiltrados);
+    } catch (err) {
+      setError('No se pudieron cargar los expedientes.');
+      setExpedientes([]);
+    }
+    setLoading(false);
+  }, [address]);
+
+  // Aseguro que cualquier inicialización de provider esté dentro de useEffect y solo en cliente
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.ethereum) {
+      // Aquí puedes inicializar ethers o cualquier lógica que dependa de la wallet
+      // Por ejemplo:
+      // const provider = new ethers.providers.Web3Provider(window.ethereum);
+      // setProvider(provider); // Si usas un estado para el provider
+    }
+  }, []);
+
   // Simulación de búsqueda de expediente (en real, llamada a contrato)
   const handleSearch = async () => {
     setLoading(true);
     setError(null);
     setSuccess(null);
-    // Aquí iría la lógica real de contrato
-    setTimeout(() => {
-      // Simulación: solo muestra un expediente si la dirección termina en "123"
-      if (patientAddress.endsWith("123")) {
-        setRecord({
-          patientInfo: {
-            nombre: "Juan Pérez",
-            fechaNacimiento: "1990-05-12",
-            edad: 34,
-            genero: "Masculino",
-            direccion: "Calle Falsa 123, Ciudad",
-            contacto: "juan.perez@email.com",
-            numeroSeguro: "123456789"
-          },
-          healthInfo: {
-            alergias: ["Penicilina"],
-            enfermedadesCronicas: ["Diabetes"],
-            medicamentos: ["Metformina"],
-            antecedentes: "Ninguno"
-          },
-          lastCheckup: "2024-04-01",
-          generalObservation: [
-            {
-              fecha: "2024-04-01",
-              observaciones: "Encías saludables. Sin caries.",
-              doctor: "Dra. Martínez"
-            }
-          ],
-          treatments: [],
-          xRays: [],
-          currentTreatmentPlan: "Revisión en 6 meses.",
-          notes: [],
-          accessGrants: [],
-          attachedDocuments: [],
-          nftStatus: "verificado"
-        });
-        setSuccess("Expediente cargado correctamente.");
+    // Lógica real: buscar expediente por wallet y verificar acceso
+    try {
+      const expedientes = JSON.parse(localStorage.getItem('expedientes') || '[]');
+      const expediente = expedientes.find((exp: any) => exp.paciente?.toLowerCase() === patientAddress.toLowerCase());
+      if (expediente) {
+        // Verificar si el dentista tiene acceso
+        const tieneAcceso =
+          expediente.dentista?.toLowerCase() === (address || '').toLowerCase() ||
+          (expediente.accessGrants && Array.isArray(expediente.accessGrants) &&
+            expediente.accessGrants.some((grant: any) => grant.dentistAddress?.toLowerCase() === (address || '').toLowerCase() && grant.isActive));
+        if (tieneAcceso) {
+          setRecord(expediente);
+          setSuccess('Expediente cargado correctamente.');
+        } else {
+          setRecord(null);
+          setError('No tienes acceso a este expediente o no existe.');
+        }
       } else {
         setRecord(null);
-        setError("No tienes acceso a este expediente o no existe.");
+        setError('No tienes acceso a este expediente o no existe.');
       }
-      setLoading(false);
-    }, 1200);
+    } catch (err) {
+      setRecord(null);
+      setError('No tienes acceso a este expediente o no existe.');
+    }
+    setLoading(false);
   };
 
   // Añadir nota
@@ -215,52 +218,6 @@ export const DentistMode: React.FC = () => {
     setSuccess('Cita agendada');
   };
 
-  // Crear expediente
-  const handleCreateRecord = () => {
-    setRecord({
-      patientInfo: {
-        nombre: newRecord.nombre,
-        fechaNacimiento: newRecord.fechaNacimiento,
-        edad: Number(newRecord.edad),
-        genero: newRecord.genero,
-        direccion: newRecord.direccion,
-        contacto: newRecord.contacto,
-        numeroSeguro: newRecord.numeroSeguro,
-      },
-      healthInfo: {
-        alergias: newRecord.alergias.split(',').map(a => a.trim()).filter(Boolean),
-        enfermedadesCronicas: newRecord.enfermedadesCronicas.split(',').map(e => e.trim()).filter(Boolean),
-        medicamentos: newRecord.medicamentos.split(',').map(m => m.trim()).filter(Boolean),
-        antecedentes: newRecord.antecedentes,
-      },
-      lastCheckup: '',
-      generalObservation: [],
-      treatments: [],
-      xRays: [],
-      currentTreatmentPlan: '',
-      notes: [],
-      accessGrants: [],
-      attachedDocuments: [],
-      nftStatus: undefined,
-    });
-    setShowCreateForm(false);
-    setSuccess('Expediente creado correctamente');
-  };
-
-  // Subir documento
-  const handleUploadDocument = () => {
-    if (!newDoc.name || !newDoc.file || !newDoc.type) return;
-    const doc: AttachedDocument = {
-      id: Date.now().toString(),
-      name: newDoc.name,
-      url: URL.createObjectURL(newDoc.file), // Simulación, en real sería IPFS
-      type: newDoc.type,
-      uploadedAt: new Date().toISOString().slice(0, 10),
-    };
-    setDocuments([...documents, doc]);
-    setNewDoc({ name: '', file: null, type: '' });
-  };
-
   const [documents, setDocuments] = useState<AttachedDocument[]>([]);
   const [newDoc, setNewDoc] = useState({
     name: '',
@@ -273,180 +230,35 @@ export const DentistMode: React.FC = () => {
 
   return (
     <div className="space-y-8">
-      <div className="flex gap-4 mb-4">
-        <button
-          onClick={() => setActiveTab('expediente')}
-          className={`px-4 py-2 rounded-lg font-medium ${activeTab === 'expediente' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' : 'bg-gray-100 text-gray-800'}`}
-        >
-          Expediente
-        </button>
-        <button
-          onClick={() => setActiveTab('pacientes')}
-          className={`px-4 py-2 rounded-lg font-medium ${activeTab === 'pacientes' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' : 'bg-gray-100 text-gray-800'}`}
-        >
-          Pacientes
-        </button>
-        <button
-          onClick={() => setActiveTab('calendario')}
-          className={`px-4 py-2 rounded-lg font-medium ${activeTab === 'calendario' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' : 'bg-gray-100 text-gray-800'}`}
-        >
-          Calendario
-        </button>
-        <button
-          onClick={() => setActiveTab('accesos')}
-          className={`px-4 py-2 rounded-lg font-medium ${activeTab === 'accesos' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' : 'bg-gray-100 text-gray-800'}`}
-        >
-          Historial de Accesos
-        </button>
-        <button
-          onClick={() => setActiveTab('documentos')}
-          className={`px-4 py-2 rounded-lg font-medium ${activeTab === 'documentos' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' : 'bg-gray-100 text-gray-800'}`}
-        >
-          Documentos
-        </button>
-      </div>
-
-      {activeTab === 'pacientes' && (
-        <AnimatedCard className="p-6">
-          <h3 className="text-lg font-semibold text-blue-900 mb-4">Pacientes con Acceso</h3>
-          <div className="space-y-2">
-            {mockPatients.map((p) => (
-              <div key={p.address} className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
-                <div>
-                  <p className="font-medium text-gray-800">{p.nombre}</p>
-                  <p className="text-sm text-gray-500">Última revisión: {p.lastCheckup}</p>
-                  <p className="text-xs text-gray-400">{p.address}</p>
-                </div>
-                <button
-                  onClick={() => {
-                    setPatientAddress(p.address);
-                    setActiveTab('expediente');
-                    setSelectedPatient(p.address);
-                    handleSearch();
-                  }}
-                  className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200"
-                >
-                  Ver Expediente
-                </button>
-              </div>
-            ))}
-          </div>
-        </AnimatedCard>
+      {/* Mensajes de loading y error siempre arriba del contenido */}
+      {loading && (
+        <div className="p-6 text-center">Cargando expedientes...</div>
       )}
-
-      {activeTab === 'calendario' && (
-        <AnimatedCard className="p-6">
-          <h3 className="text-lg font-semibold text-blue-900 mb-4">Calendario de Citas</h3>
-          <div className="mb-4">
-            <label className="block text-xs font-medium text-gray-700 mb-1">Filtrar por paciente</label>
-            <select
-              className="p-2 border rounded-lg text-gray-800"
-              value={selectedPatient || ''}
-              onChange={e => setSelectedPatient(e.target.value || null)}
-            >
-              <option value="">Todos</option>
-              {mockPatients.map(p => (
-                <option key={p.address} value={p.address}>{p.nombre}</option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            {Object.entries(patientRecords).flatMap(([address, rec]) =>
-              (!selectedPatient || address === selectedPatient)
-                ? (rec.appointments || []).map((app: Appointment) => (
-                    <div key={app.id} className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
-                      <div>
-                        <p className="font-medium text-gray-800">{app.type}</p>
-                        <p className="text-sm text-gray-500">{app.date} {app.time}</p>
-                        <p className="text-xs text-gray-400">Paciente: {address}</p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-sm ${
-                        app.status === 'confirmada'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {app.status === 'confirmada' ? 'Confirmada' : 'Pendiente'}
-                      </span>
-                    </div>
-                  ))
-                : []
-            )}
-          </div>
-        </AnimatedCard>
-      )}
-
-      {activeTab === 'accesos' && (
-        <AnimatedCard className="p-6">
-          <h3 className="text-lg font-semibold text-blue-900 mb-4">Historial de Accesos</h3>
-          <div className="space-y-2">
-            {mockAccessHistory.map((h) => (
-              <div key={h.id} className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
-                <div>
-                  <p className="font-medium text-gray-800">{h.patient}</p>
-                  <p className="text-sm text-gray-500">{h.action}</p>
-                  <p className="text-xs text-gray-400">{h.date} — {h.address}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </AnimatedCard>
-      )}
-
-      {activeTab === 'documentos' && (
-        <AnimatedCard className="p-6">
-          <h3 className="text-lg font-semibold text-blue-900 mb-4">Gestión de Documentos</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mb-4">
-            <input
-              type="text"
-              placeholder="Nombre del documento"
-              className="p-2 border rounded-lg text-gray-800 placeholder-gray-700"
-              value={newDoc.name}
-              onChange={e => setNewDoc({ ...newDoc, name: e.target.value })}
-            />
-            <input
-              type="text"
-              placeholder="Tipo (PDF, Imagen, etc.)"
-              className="p-2 border rounded-lg text-gray-800 placeholder-gray-700"
-              value={newDoc.type}
-              onChange={e => setNewDoc({ ...newDoc, type: e.target.value })}
-            />
-            <input
-              type="file"
-              className="p-2 border rounded-lg text-gray-800"
-              onChange={e => setNewDoc({ ...newDoc, file: e.target.files ? e.target.files[0] : null })}
-            />
+      {error && (
+        <div className="flex flex-col items-center justify-center p-4">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative max-w-xl w-full mb-2 flex items-center justify-between">
+            <span>{error}</span>
             <button
-              onClick={handleUploadDocument}
-              disabled={!newDoc.name || !newDoc.file || !newDoc.type}
-              className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="ml-4 text-red-700 font-bold text-lg focus:outline-none"
+              onClick={() => setError(null)}
+              aria-label="Cerrar alerta"
             >
-              Subir
+              ×
             </button>
           </div>
-          <div className="space-y-2">
-            {documents.length === 0 && <p className="text-gray-500">No hay documentos subidos.</p>}
-            {documents.map((doc) => (
-              <div key={doc.id} className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
-                <div>
-                  <p className="font-medium text-gray-800">{doc.name}</p>
-                  <p className="text-sm text-gray-500">{doc.type}</p>
-                  <p className="text-xs text-gray-400">Subido: {doc.uploadedAt}</p>
-                </div>
-                <a
-                  href={doc.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Ver/Descargar
-                </a>
-              </div>
-            ))}
-          </div>
-        </AnimatedCard>
+          <button
+            className="mt-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200"
+            onClick={() => {
+              setError(null);
+              setActiveTab('pacientes');
+            }}
+          >
+            Volver a Pacientes
+          </button>
+        </div>
       )}
-
-      {activeTab === 'expediente' && (
+      {/* Formulario de búsqueda/creación siempre visible */}
+      {!loading && !error && (
         <>
           <AnimatedCard className="p-6">
             <h2 className="text-xl font-bold text-blue-900 mb-4">Buscar Expediente de Paciente</h2>
@@ -473,226 +285,219 @@ export const DentistMode: React.FC = () => {
             {error && (
               <div className="mt-2">
                 <p className="text-red-500 text-sm">{error}</p>
-                <button
-                  onClick={() => setShowCreateForm(true)}
-                  className="mt-2 bg-gradient-to-r from-green-500 to-blue-500 text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-blue-700 transition-all duration-200"
-                >
-                  Crear expediente para este paciente
-                </button>
               </div>
             )}
             {success && <p className="text-green-600 text-sm mt-2">{success}</p>}
           </AnimatedCard>
 
-          {showCreateForm && !record && (
+          {/* Barra de tabs SIEMPRE visible */}
+          <div className="flex gap-4 mb-4">
+            <button onClick={() => setActiveTab('expediente')} className={`px-4 py-2 rounded-lg font-medium ${activeTab === 'expediente' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' : 'bg-gray-100 text-gray-800'}`}>Expediente</button>
+            <button onClick={() => setActiveTab('pacientes')} className={`px-4 py-2 rounded-lg font-medium ${activeTab === 'pacientes' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' : 'bg-gray-100 text-gray-800'}`}>Pacientes</button>
+            <button onClick={() => setActiveTab('calendario')} className={`px-4 py-2 rounded-lg font-medium ${activeTab === 'calendario' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' : 'bg-gray-100 text-gray-800'}`}>Calendario</button>
+            <button onClick={() => setActiveTab('accesos')} className={`px-4 py-2 rounded-lg font-medium ${activeTab === 'accesos' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' : 'bg-gray-100 text-gray-800'}`}>Historial de Accesos</button>
+            <button onClick={() => setActiveTab('documentos')} className={`px-4 py-2 rounded-lg font-medium ${activeTab === 'documentos' ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white' : 'bg-gray-100 text-gray-800'}`}>Documentos</button>
+          </div>
+
+          {/* Contenido de los tabs solo info real o mensaje vacío */}
+          {activeTab === 'expediente' && (
+            <div className="p-6">
+              {record ? (
+                (() => {
+                  const datos = record.datos || record.patientInfo || {};
+                  return (
+                    <div className="text-center py-8 space-y-4">
+                      <h2 className="text-2xl font-bold text-blue-900 mb-4">Expediente del Paciente</h2>
+                      <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto text-left">
+                        <p><span className="font-semibold text-gray-900">Nombre:</span> <span className="text-gray-800">{datos.nombre}</span></p>
+                        <p><span className="font-semibold text-gray-900">Fecha de nacimiento:</span> <span className="text-gray-800">{datos.fechaNacimiento}</span></p>
+                        <p><span className="font-semibold text-gray-900">Edad:</span> <span className="text-gray-800">{datos.edad}</span></p>
+                        <p><span className="font-semibold text-gray-900">Género:</span> <span className="text-gray-800">{datos.genero}</span></p>
+                        <p><span className="font-semibold text-gray-900">Dirección:</span> <span className="text-gray-800">{datos.direccion}</span></p>
+                        <p><span className="font-semibold text-gray-900">Contacto:</span> <span className="text-gray-800">{datos.contacto}</span></p>
+                        <p><span className="font-semibold text-gray-900">Número de Seguro:</span> <span className="text-gray-800">{datos.numeroSeguro}</span></p>
+                        <p><span className="font-semibold text-gray-900">Alergias:</span> <span className="text-gray-800">{datos.alergias?.join(', ') || 'Ninguna'}</span></p>
+                        <p><span className="font-semibold text-gray-900">Enfermedades crónicas:</span> <span className="text-gray-800">{datos.enfermedadesCronicas?.join(', ') || 'Ninguna'}</span></p>
+                        <p><span className="font-semibold text-gray-900">Medicamentos:</span> <span className="text-gray-800">{datos.medicamentos?.join(', ') || 'Ninguno'}</span></p>
+                        <p><span className="font-semibold text-gray-900">Antecedentes:</span> <span className="text-gray-800">{datos.antecedentes || 'Ninguno'}</span></p>
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="text-center py-8">
+                  <div className="bg-white rounded-lg shadow p-6 max-w-xl mx-auto text-gray-500">No hay expediente disponible</div>
+                </div>
+              )}
+            </div>
+          )}
+          {activeTab === 'pacientes' && (
             <AnimatedCard className="p-6">
-              <h3 className="text-lg font-semibold text-blue-900 mb-4">Crear Nuevo Expediente</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="text" placeholder="Nombre" className="p-2 border rounded-lg text-gray-800 placeholder-gray-700" value={newRecord.nombre} onChange={e => setNewRecord({ ...newRecord, nombre: e.target.value })} />
-                <input type="date" placeholder="Fecha de nacimiento" className="p-2 border rounded-lg text-gray-800 placeholder-gray-700" value={newRecord.fechaNacimiento} onChange={e => setNewRecord({ ...newRecord, fechaNacimiento: e.target.value })} />
-                <input type="number" placeholder="Edad" className="p-2 border rounded-lg text-gray-800 placeholder-gray-700" value={newRecord.edad} onChange={e => setNewRecord({ ...newRecord, edad: e.target.value })} />
-                <input type="text" placeholder="Género" className="p-2 border rounded-lg text-gray-800 placeholder-gray-700" value={newRecord.genero} onChange={e => setNewRecord({ ...newRecord, genero: e.target.value })} />
-                <input type="text" placeholder="Dirección" className="p-2 border rounded-lg text-gray-800 placeholder-gray-700" value={newRecord.direccion} onChange={e => setNewRecord({ ...newRecord, direccion: e.target.value })} />
-                <input type="text" placeholder="Contacto" className="p-2 border rounded-lg text-gray-800 placeholder-gray-700" value={newRecord.contacto} onChange={e => setNewRecord({ ...newRecord, contacto: e.target.value })} />
-                <input type="text" placeholder="Número de seguro" className="p-2 border rounded-lg text-gray-800 placeholder-gray-700" value={newRecord.numeroSeguro} onChange={e => setNewRecord({ ...newRecord, numeroSeguro: e.target.value })} />
-                <input type="text" placeholder="Alergias (separadas por coma)" className="p-2 border rounded-lg text-gray-800 placeholder-gray-700" value={newRecord.alergias} onChange={e => setNewRecord({ ...newRecord, alergias: e.target.value })} />
-                <input type="text" placeholder="Enfermedades crónicas (separadas por coma)" className="p-2 border rounded-lg text-gray-800 placeholder-gray-700" value={newRecord.enfermedadesCronicas} onChange={e => setNewRecord({ ...newRecord, enfermedadesCronicas: e.target.value })} />
-                <input type="text" placeholder="Medicamentos (separados por coma)" className="p-2 border rounded-lg text-gray-800 placeholder-gray-700" value={newRecord.medicamentos} onChange={e => setNewRecord({ ...newRecord, medicamentos: e.target.value })} />
-                <input type="text" placeholder="Antecedentes" className="p-2 border rounded-lg text-gray-800 placeholder-gray-700" value={newRecord.antecedentes} onChange={e => setNewRecord({ ...newRecord, antecedentes: e.target.value })} />
-              </div>
-              <button
-                onClick={handleCreateRecord}
-                className="mt-4 bg-gradient-to-r from-green-500 to-blue-500 text-white px-6 py-2 rounded-lg hover:from-green-600 hover:to-blue-700 transition-all duration-200"
-              >
-                Guardar expediente
-              </button>
+              <h3 className="text-lg font-semibold text-blue-900 mb-4">Pacientes con Acceso</h3>
+              {expedientes.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-600">No hay pacientes registrados aún</p>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {expedientes.map((expediente) => {
+                    const datos = expediente.datos || expediente.patientInfo || {};
+                    const esCreador = expediente.dentista?.toLowerCase() === (address || '').toLowerCase();
+                    const accessGrant = expediente.accessGrants?.find(
+                      (grant: any) => grant.dentistAddress?.toLowerCase() === (address || '').toLowerCase()
+                    );
+
+                    return (
+                      <div key={expediente.paciente} className="bg-white rounded-lg shadow p-4 hover:shadow-lg transition-shadow">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-semibold text-gray-900">{datos.nombre || 'Sin nombre'}</h4>
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            esCreador 
+                              ? 'bg-blue-100 text-blue-800' 
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {esCreador ? 'Creador' : 'Acceso Otorgado'}
+                          </span>
+                        </div>
+                        <div className="space-y-1 text-sm text-gray-600">
+                          <p><span className="font-medium">Edad:</span> {datos.edad || 'No especificada'}</p>
+                          <p><span className="font-medium">Género:</span> {datos.genero || 'No especificado'}</p>
+                          <p><span className="font-medium">Contacto:</span> {datos.contacto || 'No especificado'}</p>
+                          {!esCreador && accessGrant && (
+                            <p className="text-xs text-gray-500 mt-2">
+                              Acceso otorgado el: {new Date(accessGrant.timestamp).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setPatientAddress(expediente.paciente);
+                            setActiveTab('expediente');
+                            handleSearch();
+                          }}
+                          className="mt-3 w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200"
+                        >
+                          Ver Expediente
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </AnimatedCard>
           )}
-
-          {record && (
-            <>
-              <AnimatedCard className="p-6">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">Datos del Paciente</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-gray-800"><span className="font-medium">Nombre:</span> {record.patientInfo.nombre}</p>
-                    <p className="text-gray-800"><span className="font-medium">Fecha de nacimiento:</span> {record.patientInfo.fechaNacimiento} ({record.patientInfo.edad} años)</p>
-                    <p className="text-gray-800"><span className="font-medium">Género:</span> {record.patientInfo.genero}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-800"><span className="font-medium">Dirección:</span> {record.patientInfo.direccion}</p>
-                    <p className="text-gray-800"><span className="font-medium">Contacto:</span> {record.patientInfo.contacto}</p>
-                    {record.patientInfo.numeroSeguro && <p className="text-gray-800"><span className="font-medium">Seguro:</span> {record.patientInfo.numeroSeguro}</p>}
-                  </div>
-                </div>
-              </AnimatedCard>
-
-              <AnimatedCard className="p-6">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">Añadir Nota</h3>
-                <div className="flex gap-4 items-end">
-                  <input
-                    type="text"
-                    placeholder="Escribe una nota..."
-                    className="flex-1 p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 placeholder-gray-700"
-                    value={newNote}
-                    onChange={e => setNewNote(e.target.value)}
-                  />
-                  <button
-                    onClick={handleAddNote}
-                    disabled={!newNote}
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                  >
-                    Añadir
-                  </button>
-                </div>
-                <div className="mt-4 space-y-2">
-                  {record.notes.map(note => (
-                    <div key={note.id} className="border-l-4 border-purple-400 pl-4 my-2">
-                      <p className="text-sm text-gray-800">{note.content}</p>
-                      <p className="text-xs text-gray-500">{note.date} — Dr. {note.dentist}</p>
-                    </div>
-                  ))}
-                </div>
-              </AnimatedCard>
-
-              <AnimatedCard className="p-6">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">Añadir Tratamiento</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <input
-                    type="text"
-                    placeholder="Tipo de tratamiento"
-                    className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 placeholder-gray-700"
-                    value={newTreatment.type}
-                    onChange={e => setNewTreatment({ ...newTreatment, type: e.target.value })}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Descripción"
-                    className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 placeholder-gray-700"
-                    value={newTreatment.description}
-                    onChange={e => setNewTreatment({ ...newTreatment, description: e.target.value })}
-                  />
-                  <input
-                    type="date"
-                    className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
-                    value={newTreatment.date}
-                    onChange={e => setNewTreatment({ ...newTreatment, date: e.target.value })}
-                  />
-                  <button
-                    onClick={handleAddTreatment}
-                    disabled={!newTreatment.type || !newTreatment.description || !newTreatment.date}
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                  >
-                    Añadir
-                  </button>
-                </div>
-                <div className="mt-4 space-y-2">
-                  {record.treatments.map(treatment => (
-                    <div key={treatment.id} className="border-l-4 border-blue-400 pl-4 my-2">
-                      <p className="text-sm text-gray-800">{treatment.type} - {treatment.description}</p>
-                      <p className="text-xs text-gray-500">{treatment.date} — Dr. {treatment.dentist}</p>
-                    </div>
-                  ))}
-                </div>
-              </AnimatedCard>
-
-              <AnimatedCard className="p-6">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">Subir Radiografía/Estudio</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <input
-                    type="text"
-                    placeholder="Tipo de estudio"
-                    className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 placeholder-gray-700"
-                    value={newXRay.type}
-                    onChange={e => setNewXRay({ ...newXRay, type: e.target.value })}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Descripción"
-                    className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 placeholder-gray-700"
-                    value={newXRay.description}
-                    onChange={e => setNewXRay({ ...newXRay, description: e.target.value })}
-                  />
-                  <input
-                    type="file"
-                    className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
-                    onChange={e => setNewXRay({ ...newXRay, file: e.target.files ? e.target.files[0] : null })}
-                  />
-                  <button
-                    onClick={handleAddXRay}
-                    disabled={!newXRay.type || !newXRay.description || !newXRay.file}
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                  >
-                    Subir
-                  </button>
-                </div>
-                <div className="mt-4 space-y-2">
-                  {record.xRays.map(xray => (
-                    <div key={xray.id} className="border-l-4 border-blue-400 pl-4 my-2">
-                      <p className="text-sm text-gray-800">{xray.type} - {xray.description}</p>
-                      <p className="text-xs text-gray-500">{xray.date}</p>
-                    </div>
-                  ))}
-                </div>
-              </AnimatedCard>
-
-              <AnimatedCard className="p-6">
-                <h3 className="text-lg font-semibold text-blue-900 mb-2">Agendar Cita</h3>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+          {activeTab === 'calendario' && (
+            <AnimatedCard className="p-6">
+              <h3 className="text-lg font-semibold text-blue-900 mb-4">Calendario de Citas</h3>
+              {/* Formulario para agendar cita */}
+              <form
+                className="space-y-4 mb-8"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!newAppointment.date || !newAppointment.time || !newAppointment.type || !selectedPatient) return;
+                  // Leer expedientes
+                  const expedientes = JSON.parse(localStorage.getItem('expedientes') || '[]');
+                  const idx = expedientes.findIndex((exp: any) => exp.paciente?.toLowerCase() === selectedPatient.toLowerCase());
+                  if (idx !== -1) {
+                    expedientes[idx].appointments = expedientes[idx].appointments || [];
+                    expedientes[idx].appointments.push({
+                      id: Date.now().toString(),
+                      date: newAppointment.date,
+                      time: newAppointment.time,
+                      type: newAppointment.type,
+                      dentist: address,
+                      status: 'confirmada',
+                      description: newAppointment.description,
+                    });
+                    localStorage.setItem('expedientes', JSON.stringify(expedientes));
+                    window.dispatchEvent(new StorageEvent('storage', { key: 'expedientes' }));
+                    setSuccess('Cita agendada correctamente');
+                    setNewAppointment({ date: '', time: '', type: '', description: '' });
+                  }
+                }}
+              >
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Paciente</label>
                   <select
-                    className="p-2 border rounded-lg text-gray-800"
+                    className="w-full p-2 border rounded-lg text-black"
                     value={selectedPatient || ''}
                     onChange={e => setSelectedPatient(e.target.value)}
                   >
-                    <option value="">Selecciona paciente</option>
-                    {mockPatients.map(p => (
-                      <option key={p.address} value={p.address}>{p.nombre}</option>
+                    <option value="">Selecciona un paciente</option>
+                    {expedientes.map((exp) => (
+                      <option key={exp.paciente} value={exp.paciente}>
+                        {(exp.datos?.nombre || exp.patientInfo?.nombre || exp.paciente) + ' (' + exp.paciente.slice(0, 6) + '...)'}
+                      </option>
                     ))}
                   </select>
-                  <input
-                    type="date"
-                    className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
-                    value={newAppointment.date}
-                    onChange={e => setNewAppointment({ ...newAppointment, date: e.target.value })}
-                  />
-                  <input
-                    type="time"
-                    className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800"
-                    value={newAppointment.time}
-                    onChange={e => setNewAppointment({ ...newAppointment, time: e.target.value })}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Tipo de cita"
-                    className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 placeholder-gray-700"
-                    value={newAppointment.type}
-                    onChange={e => setNewAppointment({ ...newAppointment, type: e.target.value })}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Descripción"
-                    className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 placeholder-gray-700"
-                    value={newAppointment.description}
-                    onChange={e => setNewAppointment({ ...newAppointment, description: e.target.value })}
-                  />
-                  <button
-                    onClick={handleAddAppointment}
-                    disabled={!selectedPatient || !newAppointment.date || !newAppointment.time || !newAppointment.type}
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                  >
-                    Agendar
-                  </button>
                 </div>
-                <div className="mt-4 space-y-2">
-                  {(patientRecords[selectedPatient || '']?.appointments || []).map((app: Appointment) => (
-                    <div key={app.id} className="border-l-4 border-green-400 pl-4 my-2">
-                      <p className="text-sm text-gray-800">{app.type} - {app.description}</p>
-                      <p className="text-xs text-gray-500">{app.date} {app.time} — Dr. {app.dentist}</p>
-                    </div>
-                  ))}
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Fecha</label>
+                    <input type="date" className="w-full p-2 border rounded-lg text-black" value={newAppointment.date} onChange={e => setNewAppointment(a => ({ ...a, date: e.target.value }))} />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Hora</label>
+                    <input type="time" className="w-full p-2 border rounded-lg text-black" value={newAppointment.time} onChange={e => setNewAppointment(a => ({ ...a, time: e.target.value }))} />
+                  </div>
                 </div>
-              </AnimatedCard>
-            </>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Tipo de cita</label>
+                  <input type="text" className="w-full p-2 border rounded-lg text-black" value={newAppointment.type} onChange={e => setNewAppointment(a => ({ ...a, type: e.target.value }))} placeholder="Consulta, limpieza, etc." />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Descripción</label>
+                  <textarea className="w-full p-2 border rounded-lg text-black" value={newAppointment.description} onChange={e => setNewAppointment(a => ({ ...a, description: e.target.value }))} />
+                </div>
+                <button type="submit" className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 mt-2" disabled={!selectedPatient || !newAppointment.date || !newAppointment.time || !newAppointment.type}>
+                  Agendar Cita
+                </button>
+                {success && <div className="text-green-600 mt-2">{success}</div>}
+              </form>
+              {/* Lista de citas agendadas */}
+              <div>
+                <h4 className="font-semibold mb-2 text-gray-900">Citas Agendadas</h4>
+                {expedientes.filter(exp => exp.appointments && exp.appointments.length > 0).length === 0 ? (
+                  <div className="text-gray-600">No hay citas programadas</div>
+                ) : (
+                  <div className="space-y-4">
+                    {expedientes.filter(exp => exp.appointments && exp.appointments.length > 0).map(exp => (
+                      <div key={exp.paciente} className="mb-4">
+                        <div className="font-medium text-blue-900 mb-1">{exp.datos?.nombre || exp.patientInfo?.nombre || exp.paciente}</div>
+                        <div className="space-y-2">
+                          {exp.appointments.map((app: any) => (
+                            <div key={app.id} className="p-3 bg-gray-50 rounded-lg flex justify-between items-center">
+                              <div>
+                                <div className="font-medium text-gray-900">{app.type}</div>
+                                <div className="text-sm text-gray-500">{app.date} {app.time}</div>
+                                <div className="text-xs text-gray-500">{app.description}</div>
+                              </div>
+                              <span className="px-3 py-1 rounded-full text-sm bg-green-100 text-green-800">{app.status === 'confirmada' ? 'Confirmada' : 'Pendiente'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </AnimatedCard>
+          )}
+          {activeTab === 'accesos' && (
+            <AnimatedCard className="p-6">
+              <h3 className="text-lg font-semibold text-blue-900 mb-4">Historial de Accesos</h3>
+              <div className="text-center py-8">
+                <p className="text-gray-600">No hay historial de accesos</p>
+              </div>
+            </AnimatedCard>
+          )}
+          {activeTab === 'documentos' && (
+            <AnimatedCard className="p-6">
+              <h3 className="text-lg font-semibold text-blue-900 mb-4">Gestión de Documentos</h3>
+              <div className="text-center py-8">
+                <p className="text-gray-600">No hay documentos disponibles</p>
+              </div>
+            </AnimatedCard>
           )}
         </>
       )}
