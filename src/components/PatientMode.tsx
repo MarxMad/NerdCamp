@@ -5,6 +5,60 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccount } from 'wagmi';
+import { ethers } from 'ethers';
+
+// Definir el tema de animaciones
+const theme = {
+  animations: {
+    tabTransition: {
+      initial: { opacity: 0, y: 20 },
+      animate: { opacity: 1, y: 0 },
+      exit: { opacity: 0, y: -20 }
+    }
+  }
+};
+
+// Datos de ejemplo para estadísticas
+const healthStats = {
+  visitsLastYear: 4,
+  treatmentsCompleted: 2,
+  hygieneScore: 85,
+  monthlyProgress: [
+    { month: 'Ene', score: 80 },
+    { month: 'Feb', score: 85 },
+    { month: 'Mar', score: 90 },
+    { month: 'Abr', score: 88 },
+    { month: 'May', score: 92 },
+    { month: 'Jun', score: 85 }
+  ],
+  habits: [
+    { name: 'Cepillado', completed: 25, total: 30 },
+    { name: 'Hilo dental', completed: 20, total: 30 },
+    { name: 'Enjuague', completed: 28, total: 30 }
+  ]
+};
+
+// Datos de ejemplo para estudios
+const studies = [
+  {
+    id: 1,
+    type: 'Radiografía Panorámica',
+    date: '2024-03-15',
+    description: 'Radiografía completa de la mandíbula',
+    findings: 'No se observan anomalías significativas',
+    recommendations: 'Continuar con la higiene dental regular',
+    image: '/images/panoramic-xray.jpg'
+  },
+  {
+    id: 2,
+    type: 'Limpieza Profunda',
+    date: '2024-02-20',
+    description: 'Limpieza dental profesional',
+    findings: 'Ligera acumulación de sarro en molares',
+    recommendations: 'Mejorar técnica de cepillado en zona posterior',
+    image: '/images/cleaning.jpg'
+  }
+];
 
 interface PatientModeProps {
   provider?: ethers.providers.Web3Provider;
@@ -187,7 +241,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
 
           {activeTab === 'calendar' && (
             <div className="space-y-6">
-              <AnimatedCard className="p-6">
+              <div className="p-6 rounded-lg shadow bg-white">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-lg font-semibold text-gray-900">
                     {selectedDate.toLocaleString('es', { month: 'long', year: 'numeric' })}
@@ -219,14 +273,14 @@ export const PatientMode: React.FC<PatientModeProps> = ({
                   ))}
                   {renderCalendar()}
                 </div>
-              </AnimatedCard>
+              </div>
             </div>
           )}
 
           {activeTab === 'stats' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <AnimatedCard className="p-6">
+                <div className="p-6 rounded-lg shadow bg-white">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">Visitas Anuales</h3>
                   <motion.p
                     initial={{ scale: 0 }}
@@ -236,9 +290,9 @@ export const PatientMode: React.FC<PatientModeProps> = ({
                     {healthStats.visitsLastYear}
                   </motion.p>
                   <p className="text-sm text-gray-500 mt-1">En los últimos 12 meses</p>
-                </AnimatedCard>
+                </div>
 
-                <AnimatedCard className="p-6">
+                <div className="p-6 rounded-lg shadow bg-white">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">Tratamientos Completados</h3>
                   <motion.p
                     initial={{ scale: 0 }}
@@ -248,9 +302,9 @@ export const PatientMode: React.FC<PatientModeProps> = ({
                     {healthStats.treatmentsCompleted}
                   </motion.p>
                   <p className="text-sm text-gray-500 mt-1">En el último año</p>
-                </AnimatedCard>
+                </div>
 
-                <AnimatedCard className="p-6">
+                <div className="p-6 rounded-lg shadow bg-white">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">Puntuación de Higiene</h3>
                   <motion.p
                     initial={{ scale: 0 }}
@@ -260,10 +314,10 @@ export const PatientMode: React.FC<PatientModeProps> = ({
                     {healthStats.hygieneScore}%
                   </motion.p>
                   <p className="text-sm text-gray-500 mt-1">Promedio mensual</p>
-                </AnimatedCard>
+                </div>
               </div>
 
-              <AnimatedCard className="p-6">
+              <div className="p-6 rounded-lg shadow bg-white">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Progreso Mensual</h3>
                 <div className="h-64">
                   <div className="flex items-end h-48 space-x-4">
@@ -283,9 +337,9 @@ export const PatientMode: React.FC<PatientModeProps> = ({
                     ))}
                   </div>
                 </div>
-              </AnimatedCard>
+              </div>
 
-              <AnimatedCard className="p-6">
+              <div className="p-6 rounded-lg shadow bg-white">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Hábitos de Higiene</h3>
                 <div className="space-y-4">
                   {healthStats.habits.map((habit: any, index: number) => (
@@ -312,7 +366,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
                     </motion.div>
                   ))}
                 </div>
-              </AnimatedCard>
+              </div>
             </div>
           )}
 
