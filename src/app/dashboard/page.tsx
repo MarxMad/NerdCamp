@@ -195,16 +195,7 @@ export default function Dashboard() {
                   patientAddress={address}
                 />
               ) : (
-                <DentistMode
-                  showCreateForm={showCreateForm}
-                  setShowCreateForm={setShowCreateForm}
-                  newRecord={newRecord}
-                  setNewRecord={setNewRecord}
-                  handleCreateRecord={handleCreateRecord}
-                  loadingExpediente={loadingExpediente}
-                  errorExpediente={errorExpediente}
-                  successExpediente={successExpediente}
-                />
+                <DentistMode />
               )}
             </div>
             <div className="mt-4 lg:mt-0">
