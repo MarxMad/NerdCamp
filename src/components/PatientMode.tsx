@@ -3,23 +3,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { DentalRecord as DentalRecordType } from '../types/dental';
-import { ethers } from 'ethers';
 import { motion, AnimatePresence } from 'framer-motion';
-import { theme } from '../styles/theme';
-import { AnimatedCard } from './AnimatedCard';
 import { useAccount } from 'wagmi';
 
 interface PatientModeProps {
   provider?: ethers.providers.Web3Provider;
   patientAddress?: string;
-}
-
-interface ExpedienteDocumento {
-  ipfsHash: string;
-  timestamp: number;
-  dentista: string;
-  data: any; // Puedes tipar esto mejor si sabes la estructura
 }
 
 export const PatientMode: React.FC<PatientModeProps> = ({
@@ -34,8 +23,6 @@ export const PatientMode: React.FC<PatientModeProps> = ({
   const [dentistAddress, setDentistAddress] = useState('');
   const [isGrantingAccess, setIsGrantingAccess] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [documentos, setDocumentos] = useState<ExpedienteDocumento[]>([]);
-  const [detalle, setDetalle] = useState<ExpedienteDocumento | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -72,59 +59,6 @@ export const PatientMode: React.FC<PatientModeProps> = ({
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [address]);
-
-  useEffect(() => {
-    const fetchExpedientes = async () => {
-      if (!provider || !patientAddress) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const signer = provider.getSigner();
-        const contractAddress = "0xe3B1B985422E56Da480af78238C3bc4B82f1965B";
-        const contractABI = (await import('../abi/MyDentalVault.json')).default;
-        const contract = new ethers.Contract(contractAddress, contractABI, signer);
-        // Leer eventos DocumentoReferenciado
-        const filter = contract.filters.DocumentoReferenciado(patientAddress);
-        const logs = await contract.queryFilter(filter);
-        const expedientes: ExpedienteDocumento[] = await Promise.all(
-          logs.map(async (log: any) => {
-            const ipfsHashBytes32 = log.args.ipfsHash;
-            const timestamp = log.args.timestamp.toNumber();
-            const dentista = log.args.dentista;
-            // Convertir bytes32 a hash base58 (CID)
-            const ipfsHash = bytes32ToIpfsHash(ipfsHashBytes32);
-            // Consultar IPFS
-            let data = null;
-            try {
-              const res = await fetch(`https://ipfs.io/ipfs/${ipfsHash}`);
-              data = await res.json();
-            } catch (e) {
-              data = null;
-            }
-            return { ipfsHash, timestamp, dentista, data };
-          })
-        );
-        setDocumentos(expedientes);
-      } catch (err: unknown) {
-        setError('No se pudo cargar la lista de expedientes.');
-        setDocumentos([]);
-      }
-      setLoading(false);
-    };
-    fetchExpedientes();
-  }, [provider, patientAddress]);
-
-  // Función para convertir bytes32 a hash base58 (CID)
-  function bytes32ToIpfsHash(bytes32: string): string {
-    // Si tus hashes en el contrato ya están en formato CID, solo retorna el valor
-    // Si están en bytes32, necesitas convertirlos (esto es un ejemplo, puede requerir ajuste)
-    // Aquí se asume que el hash es CIDv0 (Qm...)
-    // Si usas CIDv1, la conversión es diferente
-    // Puedes usar la librería 'multiformats' para una conversión robusta
-    if (bytes32.startsWith('Qm')) return bytes32; // Ya es CID
-    // Si no, retorna como string hexadecimal (no ideal, pero placeholder)
-    return bytes32;
-  }
 
   const handleGrantAccess = async () => {
     if (!provider) {
@@ -284,34 +218,6 @@ export const PatientMode: React.FC<PatientModeProps> = ({
                     </div>
                   ))}
                   {renderCalendar()}
-                </div>
-              </AnimatedCard>
-
-              <AnimatedCard className="p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Próximas Citas</h3>
-                <div className="space-y-4">
-                  {appointments.map((appointment: any) => (
-                    <motion.div
-                      key={appointment.id}
-                      whileHover={{ scale: 1.02 }}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium text-gray-900">{appointment.type}</p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(appointment.date).toLocaleDateString()} - {appointment.time}
-                        </p>
-                        <p className="text-sm text-gray-500">Dr. {appointment.dentist}</p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-sm ${
-                        appointment.status === 'confirmada'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {appointment.status === 'confirmada' ? 'Confirmada' : 'Pendiente'}
-                      </span>
-                    </motion.div>
-                  ))}
                 </div>
               </AnimatedCard>
             </div>
