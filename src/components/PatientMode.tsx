@@ -148,7 +148,7 @@ export const PatientMode: React.FC<PatientModeProps> = ({
       setError(null);
       // --- Simulación: guardar acceso en localStorage para la demo ---
       const expedientes = JSON.parse(localStorage.getItem('expedientes') || '[]');
-      const idx = expedientes.findIndex((exp) => exp.paciente?.toLowerCase() === (address || '').toLowerCase());
+      const idx = expedientes.findIndex((exp: any) => exp.paciente?.toLowerCase() === (address || '').toLowerCase());
       if (idx !== -1) {
         expedientes[idx].accessGrants = expedientes[idx].accessGrants || [];
         expedientes[idx].accessGrants.push({
