@@ -191,8 +191,8 @@ export const PatientMode: React.FC<PatientModeProps> = ({
     // Agregar días del mes
     for (let day = 1; day <= daysInMonth; day++) {
       const currentDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day);
-      const dayAppointments = appointments.filter(
-        app => new Date(app.date).toDateString() === currentDate.toDateString()
+      const dayAppointments = (record?.appointments ?? []).filter(
+        (app: any) => new Date(app.date).toDateString() === currentDate.toDateString()
       );
 
       days.push(
