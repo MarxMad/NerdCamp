@@ -306,7 +306,7 @@ export const DentistMode: React.FC = () => {
             <div className="p-6">
               {record ? (
                 (() => {
-                  const datos = record.datos || record.patientInfo || {};
+                  const datos = (record as any).datos ?? (record as any).patientInfo ?? {};
                   return (
                     <div className="text-center py-8 space-y-4">
                       <h2 className="text-2xl font-bold text-blue-900 mb-4">Expediente del Paciente</h2>
